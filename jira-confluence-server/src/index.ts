@@ -148,16 +148,43 @@ class JiraConfluenceServer {
         },
         {
           name: 'confluence_search_pages',
-          description: 'Search for Confluence pages (default limit: 5)',
+          description: 'Search for Confluence pages with optimized response size (default limit: 25)',
           inputSchema: {
             type: 'object',
             properties: {
               query: { type: 'string', description: 'Search query' },
               spaceKey: { type: 'string', description: 'Space key to search in' },
               start: { type: 'number', description: 'Starting index for pagination (default: 0)' },
-              limit: { type: 'number', description: 'Maximum number of results to return (default: 5)' }
+              limit: { type: 'number', description: 'Maximum number of results to return (default: 25)' }
             },
             required: ['query']
+          }
+        },
+        {
+          name: 'confluence_get_page_content',
+          description: 'Get full content for a specific Confluence page',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              pageId: { type: 'string', description: 'ID of the page to fetch' }
+            },
+            required: ['pageId']
+          }
+        },
+        {
+          name: 'confluence_bulk_get_pages',
+          description: 'Get content for multiple Confluence pages (max 10)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              pageIds: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Array of page IDs to fetch',
+                maxItems: 10
+              }
+            },
+            required: ['pageIds']
           }
         },
         {
@@ -219,17 +246,56 @@ class JiraConfluenceServer {
             const query = args.query.trim();
             if (!query) {
               throw new McpError(
-                ErrorCode.InvalidParams, 
+                ErrorCode.InvalidParams,
                 'Search query cannot be empty'
               );
             }
             
-            const result = await this.confluenceClient.searchPages(
+            const result = await this.confluenceClient.searchPagesOptimized(
               query,
               args.spaceKey,
               args.start,
               args.limit
             );
+            
+            // Transform and sanitize the result to ensure it's valid JSON
+            const sanitizedResult = JSON.parse(JSON.stringify(result));
+            
+            return {
+              content: [{ type: 'text', text: JSON.stringify(sanitizedResult) }]
+            };
+          }
+
+          case 'confluence_get_page_content': {
+            this.validateArgs<{ pageId: string }>(args, ['pageId']);
+            const page = await this.confluenceClient.getPageContent(args.pageId);
+            
+            // Transform and sanitize the result to ensure it's valid JSON
+            const sanitizedPage = JSON.parse(JSON.stringify(page));
+            
+            return {
+              content: [{ type: 'text', text: JSON.stringify(sanitizedPage) }]
+            };
+          }
+
+          case 'confluence_bulk_get_pages': {
+            this.validateArgs<{ pageIds: string[] }>(args, ['pageIds']);
+            
+            if (!Array.isArray(args.pageIds)) {
+              throw new McpError(
+                ErrorCode.InvalidParams,
+                'pageIds must be an array'
+              );
+            }
+
+            if (args.pageIds.length > 10) {
+              throw new McpError(
+                ErrorCode.InvalidParams,
+                'Cannot fetch more than 10 pages at once'
+              );
+            }
+
+            const result = await this.confluenceClient.bulkGetPages(args.pageIds);
             
             // Transform and sanitize the result to ensure it's valid JSON
             const sanitizedResult = JSON.parse(JSON.stringify(result));

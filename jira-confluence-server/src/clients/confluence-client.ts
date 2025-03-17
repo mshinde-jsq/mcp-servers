@@ -1,5 +1,13 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { ConfluencePage, ConfluenceComment, ConfluenceAttachment, ConfluenceSearchResult } from '../types/confluence.js';
+import { 
+  ConfluencePage, 
+  ConfluenceComment, 
+  ConfluenceAttachment, 
+  ConfluenceSearchResult,
+  PaginatedSearchResponse,
+  ConfluencePageMetadata,
+  BulkContentResponse
+} from '../types/confluence.js';
 
 interface ConfluenceErrorResponse {
   message?: string;
@@ -31,6 +39,9 @@ function handleSpecificError(error: unknown, status: number, defaultMessage: str
   }
   throw error;
 }
+
+// Max number of pages that can be fetched in bulk
+const MAX_BULK_PAGES = 10;
 
 export class ConfluenceClient {
   private client: AxiosInstance;
@@ -64,8 +75,13 @@ export class ConfluenceClient {
     );
   }
 
-  // Page operations
-  async searchPages(query: string, spaceKey?: string, start: number = 0, limit: number = 5): Promise<ConfluenceSearchResult> {
+  // New optimized search method with pagination
+  async searchPagesOptimized(
+    query: string, 
+    spaceKey?: string, 
+    start: number = 0, 
+    limit: number = 25
+  ): Promise<PaginatedSearchResponse> {
     try {
       // Ensure query is not empty - provide a fallback if it is
       const searchQuery = query?.trim() || 'order by lastmodified desc';
@@ -77,11 +93,65 @@ export class ConfluenceClient {
       if (searchQuery && !searchQuery.startsWith('order by')) {
         cqlQuery += ` AND text ~ "${searchQuery}"`;
       } else if (searchQuery.startsWith('order by')) {
-        // If it's just an order clause, append it to the cqlQuery
         cqlQuery += ` ${searchQuery}`;
       }
       
       // Add space filter if provided
+      if (spaceKey) {
+        cqlQuery += ` AND space="${spaceKey}"`;
+      }
+      
+      const response = await this.client.get('content/search', { 
+        params: {
+          cql: cqlQuery,
+          expand: 'space,version,_links',
+          start,
+          limit
+        }
+      });
+
+      const searchResult = response.data;
+      
+      // Transform the response into our optimized format
+      const pageMetadata: ConfluencePageMetadata[] = searchResult.results.map((page: ConfluencePage) => ({
+        id: page.id,
+        title: page.title,
+        space: page.space,
+        _links: page._links || { webui: `${this.baseUrl}/wiki/spaces/${page.space.key}/pages/${page.id}` },
+        excerpt: page.excerpt || '',
+        lastModified: page.version.when
+      }));
+
+      return {
+        results: pageMetadata,
+        metadata: {
+          start: searchResult.start,
+          limit: searchResult.limit,
+          totalSize: searchResult.size,
+          hasNext: !!searchResult._links.next,
+          nextPageStart: searchResult._links.next ? start + limit : undefined
+        }
+      };
+    } catch (error) {
+      return handleApiError(error, 'searching pages');
+    }
+  }
+
+  // Legacy search method (kept for backward compatibility)
+  async searchPages(query: string, spaceKey?: string, start: number = 0, limit: number = 5): Promise<ConfluenceSearchResult> {
+    try {
+      // Ensure query is not empty - provide a fallback if it is
+      const searchQuery = query?.trim() || 'order by lastmodified desc';
+      
+      // Construct CQL query
+      let cqlQuery = `type=page`;
+      
+      if (searchQuery && !searchQuery.startsWith('order by')) {
+        cqlQuery += ` AND text ~ "${searchQuery}"`;
+      } else if (searchQuery.startsWith('order by')) {
+        cqlQuery += ` ${searchQuery}`;
+      }
+      
       if (spaceKey) {
         cqlQuery += ` AND space="${spaceKey}"`;
       }
@@ -98,6 +168,56 @@ export class ConfluenceClient {
     } catch (error) {
       return handleApiError(error, 'searching pages');
     }
+  }
+
+  // Get full content for a single page
+  async getPageContent(pageId: string): Promise<ConfluencePage> {
+    try {
+      const response = await this.client.get(`content/${pageId}`, {
+        params: {
+          expand: 'body.storage,version,ancestors,space'
+        }
+      });
+      return response.data;
+    } catch (error) {
+      return handleApiError(error, `getting page ${pageId}`);
+    }
+  }
+
+  // New method for bulk fetching page content
+  async bulkGetPages(pageIds: string[]): Promise<BulkContentResponse> {
+    if (pageIds.length > MAX_BULK_PAGES) {
+      throw new Error(`Cannot fetch more than ${MAX_BULK_PAGES} pages at once`);
+    }
+
+    const results = await Promise.allSettled(
+      pageIds.map(id => this.getPageContent(id))
+    );
+
+    const pages = results.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return {
+          id: pageIds[index],
+          content: result.value.body.storage.value
+        };
+      } else {
+        return {
+          id: pageIds[index],
+          content: '',
+          error: result.reason.message
+        };
+      }
+    });
+
+    const errorCount = pages.filter(page => 'error' in page).length;
+
+    return {
+      pages,
+      metadata: {
+        successCount: pages.length - errorCount,
+        errorCount
+      }
+    };
   }
 
   async getPage(pageId: string): Promise<ConfluencePage> {
@@ -156,7 +276,6 @@ export class ConfluenceClient {
     }
   }
 
-  // Comments operations
   async getComments(pageId: string): Promise<ConfluenceComment[]> {
     try {
       const response = await this.client.get(`content/${pageId}/child/comment`, {
@@ -190,7 +309,6 @@ export class ConfluenceClient {
     }
   }
 
-  // Attachments operations
   async getAttachments(pageId: string): Promise<ConfluenceAttachment[]> {
     try {
       const response = await this.client.get(`content/${pageId}/child/attachment`, {
@@ -222,7 +340,6 @@ export class ConfluenceClient {
     }
   }
 
-  // Space operations
   async getSpaces(): Promise<any[]> {
     try {
       const response = await this.client.get('space', {
@@ -238,7 +355,6 @@ export class ConfluenceClient {
     }
   }
 
-  // Convert HTML to Storage format (Confluence Wiki Markup)
   async convertHtmlToStorage(html: string): Promise<string> {
     try {
       const response = await this.client.post('contentbody/convert/storage', {
