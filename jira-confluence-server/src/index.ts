@@ -13,8 +13,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { JiraClient } from './clients/jira-client.js';
 import { ConfluenceClient } from './clients/confluence-client.js';
-import { JiraIssue, JiraSearchResult } from './types/jira.js';
-import { ConfluencePage, ConfluenceSearchResult } from './types/confluence.js';
 
 // Load environment variables from .env file
 config({ path: join(process.cwd(), '.env') });
@@ -188,8 +186,12 @@ class JiraConfluenceServer {
           case 'jira_search_issues': {
             this.validateArgs<JiraSearchArgs>(args, ['jql']);
             const result = await this.jiraClient.searchIssues(args.jql, args.maxResults);
+            
+            // Transform and sanitize the result to ensure it's valid JSON
+            const sanitizedResult = JSON.parse(JSON.stringify(result));
+            
             return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+              content: [{ type: 'text', text: JSON.stringify(sanitizedResult) }]
             };
           }
 
@@ -201,8 +203,12 @@ class JiraConfluenceServer {
               args.summary,
               args.description
             );
+            
+            // Transform and sanitize the result to ensure it's valid JSON
+            const sanitizedIssue = JSON.parse(JSON.stringify(issue));
+            
             return {
-              content: [{ type: 'text', text: JSON.stringify(issue, null, 2) }]
+              content: [{ type: 'text', text: JSON.stringify(sanitizedIssue) }]
             };
           }
 
@@ -214,8 +220,12 @@ class JiraConfluenceServer {
               args.start,
               args.limit
             );
+            
+            // Transform and sanitize the result to ensure it's valid JSON
+            const sanitizedResult = JSON.parse(JSON.stringify(result));
+            
             return {
-              content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+              content: [{ type: 'text', text: JSON.stringify(sanitizedResult) }]
             };
           }
 
@@ -227,8 +237,12 @@ class JiraConfluenceServer {
               args.content,
               args.parentId
             );
+            
+            // Transform and sanitize the result to ensure it's valid JSON
+            const sanitizedPage = JSON.parse(JSON.stringify(page));
+            
             return {
-              content: [{ type: 'text', text: JSON.stringify(page, null, 2) }]
+              content: [{ type: 'text', text: JSON.stringify(sanitizedPage) }]
             };
           }
 
@@ -268,20 +282,28 @@ class JiraConfluenceServer {
       try {
         if (uri === 'jira://issues') {
           const issues = await this.jiraClient.searchIssues('order by created DESC', 10);
+          
+          // Transform and sanitize the result to ensure it's valid JSON
+          const sanitizedIssues = JSON.parse(JSON.stringify(issues));
+          
           return {
             contents: [{
               uri,
               mimeType: 'application/json',
-              text: JSON.stringify(issues, null, 2)
+              text: JSON.stringify(sanitizedIssues)
             }]
           };
         } else if (uri === 'confluence://pages') {
           const pages = await this.confluenceClient.searchPages('');
+          
+          // Transform and sanitize the result to ensure it's valid JSON
+          const sanitizedPages = JSON.parse(JSON.stringify(pages));
+          
           return {
             contents: [{
               uri,
               mimeType: 'application/json',
-              text: JSON.stringify(pages, null, 2)
+              text: JSON.stringify(sanitizedPages)
             }]
           };
         }

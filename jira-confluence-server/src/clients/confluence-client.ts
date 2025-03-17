@@ -40,9 +40,7 @@ export class ConfluenceClient {
     this.baseUrl = baseUrl;
     
     const authString = `${email}:${token}`;
-    console.log('Auth string (without encoding):', authString);
     const encodedAuth = Buffer.from(authString).toString('base64');
-    console.log('Encoded auth string:', encodedAuth);
     
     this.client = axios.create({
       baseURL: `${baseUrl}/rest/api`,
@@ -50,19 +48,6 @@ export class ConfluenceClient {
         'Authorization': `Basic ${encodedAuth}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
-      },
-      paramsSerializer: params => {
-        // Log the params before serialization
-        console.log('Request params before serialization:', params);
-        // Convert array parameters to comma-separated values
-        return Object.entries(params)
-          .map(([key, value]) => {
-            if (Array.isArray(value)) {
-              return `${key}=${value.join(',')}`;
-            }
-            return `${key}=${encodeURIComponent(String(value))}`;
-          })
-          .join('&');
       }
     });
 
@@ -81,15 +66,17 @@ export class ConfluenceClient {
 
   // Page operations
   async searchPages(query: string, spaceKey?: string, start: number = 0, limit: number = 5): Promise<ConfluenceSearchResult> {
-    const params = {
-      cql: `type=page AND text ~ "${query}"${spaceKey ? ` AND space="${spaceKey}"` : ''}`,
-      expand: ['body.storage', 'version', 'space'],
-      start,
-      limit
-    };
     try {
-      const response = await this.client.get('content/search', { params });
-      console.log('Search Response:', JSON.stringify(response.data, null, 2));
+      const cqlQuery = `type=page AND text ~ "${query}"${spaceKey ? ` AND space="${spaceKey}"` : ''}`;
+      
+      const response = await this.client.get('content/search', { 
+        params: {
+          cql: cqlQuery,
+          expand: 'body.storage,version,space',
+          start,
+          limit
+        }
+      });
       return response.data;
     } catch (error) {
       return handleApiError(error, 'searching pages');
@@ -100,7 +87,7 @@ export class ConfluenceClient {
     try {
       const response = await this.client.get(`content/${pageId}`, {
         params: {
-          expand: ['body.storage', 'version', 'ancestors', 'space']
+          expand: 'body.storage,version,ancestors,space'
         }
       });
       return response.data;
@@ -157,7 +144,7 @@ export class ConfluenceClient {
     try {
       const response = await this.client.get(`content/${pageId}/child/comment`, {
         params: {
-          expand: ['body.storage', 'version']
+          expand: 'body.storage,version'
         }
       });
       return response.data.results;
@@ -191,7 +178,7 @@ export class ConfluenceClient {
     try {
       const response = await this.client.get(`content/${pageId}/child/attachment`, {
         params: {
-          expand: ['version', 'extensions']
+          expand: 'version,extensions'
         }
       });
       return response.data.results;
@@ -225,7 +212,7 @@ export class ConfluenceClient {
         params: {
           type: 'global',
           status: 'current',
-          expand: ['description']
+          expand: 'description'
         }
       });
       return response.data.results;
