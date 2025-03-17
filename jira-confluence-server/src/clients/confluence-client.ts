@@ -67,7 +67,24 @@ export class ConfluenceClient {
   // Page operations
   async searchPages(query: string, spaceKey?: string, start: number = 0, limit: number = 5): Promise<ConfluenceSearchResult> {
     try {
-      const cqlQuery = `type=page AND text ~ "${query}"${spaceKey ? ` AND space="${spaceKey}"` : ''}`;
+      // Ensure query is not empty - provide a fallback if it is
+      const searchQuery = query?.trim() || 'order by lastmodified desc';
+      
+      // Construct CQL query
+      let cqlQuery = `type=page`;
+      
+      // Only add text search if query is provided and not empty
+      if (searchQuery && !searchQuery.startsWith('order by')) {
+        cqlQuery += ` AND text ~ "${searchQuery}"`;
+      } else if (searchQuery.startsWith('order by')) {
+        // If it's just an order clause, append it to the cqlQuery
+        cqlQuery += ` ${searchQuery}`;
+      }
+      
+      // Add space filter if provided
+      if (spaceKey) {
+        cqlQuery += ` AND space="${spaceKey}"`;
+      }
       
       const response = await this.client.get('content/search', { 
         params: {

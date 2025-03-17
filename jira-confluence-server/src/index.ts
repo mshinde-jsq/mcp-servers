@@ -214,8 +214,18 @@ class JiraConfluenceServer {
 
           case 'confluence_search_pages': {
             this.validateArgs<ConfluenceSearchArgs>(args, ['query']);
+            
+            // Ensure the query isn't empty after trimming
+            const query = args.query.trim();
+            if (!query) {
+              throw new McpError(
+                ErrorCode.InvalidParams, 
+                'Search query cannot be empty'
+              );
+            }
+            
             const result = await this.confluenceClient.searchPages(
-              args.query,
+              query,
               args.spaceKey,
               args.start,
               args.limit
@@ -294,7 +304,8 @@ class JiraConfluenceServer {
             }]
           };
         } else if (uri === 'confluence://pages') {
-          const pages = await this.confluenceClient.searchPages('');
+          // Use a query that will return recent pages instead of an empty query
+          const pages = await this.confluenceClient.searchPages('order by lastmodified desc');
           
           // Transform and sanitize the result to ensure it's valid JSON
           const sanitizedPages = JSON.parse(JSON.stringify(pages));
