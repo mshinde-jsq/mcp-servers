@@ -31,10 +31,12 @@ npm install
    ```ini
    # Jira configuration
    JIRA_BASE_URL=https://your-domain.atlassian.net
+   JIRA_EMAIL=user@your-domain.com
    JIRA_TOKEN=your-jira-api-token
 
    # Confluence configuration
    CONFLUENCE_BASE_URL=https://your-domain.atlassian.net/wiki
+   CONFLUENCE_EMAIL=user@your-domain.com
    CONFLUENCE_TOKEN=your-confluence-api-token
    ```
 
