@@ -27,7 +27,7 @@ describe('JiraClient', () => {
   let client: JiraClient;
 
   beforeEach(() => {
-    client = new JiraClient('https://test.atlassian.net', 'test-token');
+    client = new JiraClient('https://test.atlassian.net', 'test@example.com', 'test-token');
     jest.clearAllMocks();
   });
 

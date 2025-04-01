@@ -5,12 +5,16 @@ export class JiraClient {
   private client: AxiosInstance;
   private baseUrl: string;
 
-  constructor(baseUrl: string, token: string) {
+  constructor(baseUrl: string, email: string, token: string) {
     this.baseUrl = baseUrl;
+
+    const authString = `${email}:${token}`;
+    const encodedAuth = Buffer.from(authString).toString('base64');
+
     this.client = axios.create({
       baseURL: `${baseUrl}/rest/api/3`,
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Basic ${encodedAuth}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       }

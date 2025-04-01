@@ -19,6 +19,7 @@ config({ path: join(process.cwd(), '.env') });
 
 interface EnvVars {
   JIRA_BASE_URL: string;
+  JIRA_EMAIL: string;
   JIRA_TOKEN: string;
   CONFLUENCE_BASE_URL: string;
   CONFLUENCE_TOKEN: string;
@@ -27,6 +28,7 @@ interface EnvVars {
 // Get environment variables
 const envVars: Partial<EnvVars> = {
   JIRA_BASE_URL: process.env.JIRA_BASE_URL,
+  JIRA_EMAIL: process.env.JIRA_EMAIL,
   JIRA_TOKEN: process.env.JIRA_TOKEN,
   CONFLUENCE_BASE_URL: process.env.CONFLUENCE_BASE_URL,
   CONFLUENCE_TOKEN: process.env.CONFLUENCE_TOKEN,
@@ -44,6 +46,7 @@ if (missingVars.length > 0) {
 // Now TypeScript knows these are non-null
 const {
   JIRA_BASE_URL,
+  JIRA_EMAIL,
   JIRA_TOKEN,
   CONFLUENCE_BASE_URL,
   CONFLUENCE_TOKEN
@@ -81,7 +84,7 @@ class JiraConfluenceServer {
   private confluenceClient: ConfluenceClient;
 
   constructor() {
-    this.jiraClient = new JiraClient(JIRA_BASE_URL, JIRA_TOKEN);
+    this.jiraClient = new JiraClient(JIRA_BASE_URL, JIRA_EMAIL, JIRA_TOKEN);
     this.confluenceClient = new ConfluenceClient(
       CONFLUENCE_BASE_URL,
       'mshinde@junipersquare.com',
