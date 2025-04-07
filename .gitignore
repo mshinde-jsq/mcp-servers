@@ -1,5 +1,7 @@
 **/.env
 **/.DS_Store
-./.vscode/
-./.idea/
-./.roo/
+/.vscode/
+/.idea/
+/.roo/
+/logs/
+**/node_modules/
